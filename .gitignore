@@ -23,6 +23,7 @@
 
 # tool-specific
 .warp/
+.claude/
 
 # debug
 npm-debug.log*

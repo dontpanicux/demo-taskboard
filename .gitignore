@@ -18,6 +18,12 @@
 .DS_Store
 *.pem
 
+# logs
+*.log
+
+# tool-specific
+.warp/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

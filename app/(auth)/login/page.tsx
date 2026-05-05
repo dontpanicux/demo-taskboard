@@ -110,8 +110,8 @@ export default function LoginPage() {
     if (error) {
       setMessage({ type: 'error', text: error.message })
     } else {
-      setMessage({ type: 'success', text: 'Account created! Check your email to confirm before signing in.' })
       resetForm()
+      setMessage({ type: 'success', text: 'Account created! Check your email to confirm before signing in.' })
     }
     setLoading(false)
   }

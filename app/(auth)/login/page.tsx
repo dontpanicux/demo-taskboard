@@ -69,6 +69,24 @@ export default function LoginPage() {
     setLoading(false)
   }
 
+  async function handleForgotPassword() {
+    if (!email) {
+      setMessage({ type: 'error', text: 'Enter your email address above first.' })
+      return
+    }
+    setLoading(true)
+    setMessage(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+    })
+    // Always show success — don't confirm whether the email exists
+    setMessage({
+      type: 'success',
+      text: error ? error.message : 'If that email is registered you\'ll receive a reset link shortly.',
+    })
+    setLoading(false)
+  }
+
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault()
     setMessage(null)
@@ -157,13 +175,25 @@ export default function LoginPage() {
           {mode === 'password' && (
             <form onSubmit={handlePasswordSignIn} className="space-y-3">
               <EmailField email={email} onChange={setEmail} />
-              <PasswordField
-                value={password}
-                onChange={setPassword}
-                show={showPassword}
-                onToggleShow={() => setShowPassword((v) => !v)}
-                label="Password"
-              />
+              <div className="space-y-1">
+                <PasswordField
+                  value={password}
+                  onChange={setPassword}
+                  show={showPassword}
+                  onToggleShow={() => setShowPassword((v) => !v)}
+                  label="Password"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                    className="text-xs text-sky-600 hover:text-sky-700 disabled:opacity-50"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              </div>
               <SubmitButton loading={loading}>Sign in</SubmitButton>
             </form>
           )}

@@ -43,7 +43,9 @@ export function Navbar({ userEmail, userName }: NavbarProps) {
 
       <div className="flex items-center gap-3">
         {(userName || userEmail) && (
-          <Avatar name={userName} email={userEmail} size="sm" />
+          <Link href="/account" aria-label="Account settings">
+            <Avatar name={userName} email={userEmail} size="sm" />
+          </Link>
         )}
         <button
           onClick={handleSignOut}

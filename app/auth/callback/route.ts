@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -8,10 +8,30 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/boards'
 
   if (code) {
-    const supabase = await createClient()
+    const cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }> = []
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookies) {
+            cookiesToSet.push(...cookies)
+          },
+        },
+      }
+    )
+
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      const response = NextResponse.redirect(`${origin}${next}`)
+      cookiesToSet.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options)
+      })
+      return response
     }
   }
 

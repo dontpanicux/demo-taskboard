@@ -3,31 +3,98 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+type Mode = 'magic-link' | 'password' | 'signup'
+
+function passwordStrength(pw: string): { score: number; label: string } {
+  let score = 0
+  if (pw.length >= 8) score++
+  if (pw.length >= 12) score++
+  if (/[A-Z]/.test(pw)) score++
+  if (/[0-9]/.test(pw)) score++
+  if (/[^A-Za-z0-9]/.test(pw)) score++
+  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very strong']
+  return { score, label: labels[score] ?? '' }
+}
+
+const strengthColor = ['', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-emerald-500']
+
 export default function LoginPage() {
+  const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const supabase = createClient()
 
+  function resetForm() {
+    setPassword('')
+    setConfirmPassword('')
+    setMessage(null)
+    setShowPassword(false)
+  }
+
+  function switchMode(next: Mode) {
+    setMode(next)
+    resetForm()
+  }
+
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setMessage(null)
-
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
+    setMessage(
+      error
+        ? { type: 'error', text: error.message }
+        : { type: 'success', text: 'Check your email for the login link!' }
+    )
+    setLoading(false)
+  }
 
+  async function handlePasswordSignIn(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setMessage(null)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      // Generic message — don't reveal whether email exists
+      setMessage({ type: 'error', text: 'Invalid email or password.' })
+    }
+    setLoading(false)
+  }
+
+  async function handleSignUp(e: React.FormEvent) {
+    e.preventDefault()
+    setMessage(null)
+
+    if (password !== confirmPassword) {
+      setMessage({ type: 'error', text: 'Passwords do not match.' })
+      return
+    }
+    const { score } = passwordStrength(password)
+    if (score < 2) {
+      setMessage({ type: 'error', text: 'Password is too weak. Use at least 8 characters with mixed case or numbers.' })
+      return
+    }
+
+    setLoading(true)
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    })
     if (error) {
       setMessage({ type: 'error', text: error.message })
     } else {
-      setMessage({ type: 'success', text: 'Check your email for the login link!' })
+      setMessage({ type: 'success', text: 'Account created! Check your email to confirm before signing in.' })
+      resetForm()
     }
-
     setLoading(false)
   }
 
@@ -35,15 +102,15 @@ export default function LoginPage() {
     setLoading(true)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
     if (error) {
       setMessage({ type: 'error', text: error.message })
       setLoading(false)
     }
   }
+
+  const { score: pwScore, label: pwLabel } = passwordStrength(password)
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
@@ -60,30 +127,87 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-          <form onSubmit={handleMagicLink} className="space-y-3">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2 px-4 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Sending…' : 'Send magic link'}
-            </button>
-          </form>
 
+          {/* Mode tabs */}
+          <div className="flex rounded-lg bg-slate-100 p-1 gap-1">
+            {(['password', 'magic-link', 'signup'] as Mode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  mode === m
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {m === 'password' ? 'Password' : m === 'magic-link' ? 'Magic link' : 'Sign up'}
+              </button>
+            ))}
+          </div>
+
+          {/* Magic link */}
+          {mode === 'magic-link' && (
+            <form onSubmit={handleMagicLink} className="space-y-3">
+              <EmailField email={email} onChange={setEmail} />
+              <SubmitButton loading={loading}>Send magic link</SubmitButton>
+            </form>
+          )}
+
+          {/* Password sign-in */}
+          {mode === 'password' && (
+            <form onSubmit={handlePasswordSignIn} className="space-y-3">
+              <EmailField email={email} onChange={setEmail} />
+              <PasswordField
+                value={password}
+                onChange={setPassword}
+                show={showPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                label="Password"
+              />
+              <SubmitButton loading={loading}>Sign in</SubmitButton>
+            </form>
+          )}
+
+          {/* Sign up */}
+          {mode === 'signup' && (
+            <form onSubmit={handleSignUp} className="space-y-3">
+              <EmailField email={email} onChange={setEmail} />
+              <PasswordField
+                value={password}
+                onChange={setPassword}
+                show={showPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                label="Password"
+              />
+              {/* Strength meter */}
+              {password.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-1 flex-1 rounded-full transition-colors ${
+                          i <= pwScore ? strengthColor[pwScore] : 'bg-slate-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500">{pwLabel}</p>
+                </div>
+              )}
+              <PasswordField
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                show={showPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                label="Confirm password"
+                autoComplete="new-password"
+              />
+              <SubmitButton loading={loading}>Create account</SubmitButton>
+            </form>
+          )}
+
+          {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200" />
@@ -93,6 +217,7 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* GitHub */}
           <button
             onClick={handleGitHub}
             disabled={loading}
@@ -106,9 +231,7 @@ export default function LoginPage() {
 
           {message && (
             <p className={`text-sm text-center rounded-lg px-3 py-2 ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-700'
-                : 'bg-red-50 text-red-700'
+              message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
             }`}>
               {message.text}
             </p>
@@ -116,5 +239,91 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function EmailField({ email, onChange }: { email: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
+        Email address
+      </label>
+      <input
+        id="email"
+        type="email"
+        required
+        value={email}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="you@example.com"
+        autoComplete="email"
+        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+      />
+    </div>
+  )
+}
+
+function PasswordField({
+  value,
+  onChange,
+  show,
+  onToggleShow,
+  label,
+  autoComplete = 'current-password',
+}: {
+  value: string
+  onChange: (v: string) => void
+  show: boolean
+  onToggleShow: () => void
+  label: string
+  autoComplete?: string
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          required
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          minLength={8}
+          className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+        />
+        <button
+          type="button"
+          onClick={onToggleShow}
+          className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+          tabIndex={-1}
+          aria-label={show ? 'Hide password' : 'Show password'}
+        >
+          {show ? (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SubmitButton({ loading, children }: { loading: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="submit"
+      disabled={loading}
+      className="w-full py-2 px-4 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {loading ? 'Please wait…' : children}
+    </button>
   )
 }

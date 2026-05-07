@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type Mode = 'magic-link' | 'password' | 'signup'
@@ -28,6 +29,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const supabase = createClient()
+  const router = useRouter()
 
   function resetForm() {
     setPassword('')
@@ -63,10 +65,11 @@ export default function LoginPage() {
     setMessage(null)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      // Generic message — don't reveal whether email exists
       setMessage({ type: 'error', text: 'Invalid email or password.' })
+      setLoading(false)
+    } else {
+      router.push('/boards')
     }
-    setLoading(false)
   }
 
   async function handleForgotPassword() {
